@@ -1,5 +1,5 @@
 import { Copy, Plus, Search, Trash2, X } from "lucide-react";
-import { ChangeEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { findMatchingGroups, LinkedWordRule, MultiMatchConfig, parseWordList } from "./lib/wordMatcher";
 
 const sampleWords = `notebook
@@ -26,34 +26,56 @@ const defaultConfig: MultiMatchConfig = {
   rules: defaultRules,
 };
 
+const maxWordLength = 8;
+const wordLengths = Array.from({ length: maxWordLength }, (_, index) => index + 1);
+
+function clampLength(value: number) {
+  return Math.max(1, Math.min(value, maxWordLength));
+}
+
 function clampPosition(value: number, length: number) {
   return Math.max(1, Math.min(value, Math.max(length, 1)));
 }
 
-function NumberField({
+function SelectField({
   label,
   value,
-  min,
-  max,
+  options,
   onChange,
 }: {
   label: string;
   value: number;
-  min: number;
-  max?: number;
+  options: number[];
   onChange: (value: number) => void;
 }) {
-  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const nextValue = Number.parseInt(event.target.value, 10);
-    onChange(Number.isNaN(nextValue) ? min : nextValue);
-  };
-
   return (
     <label className="field">
       <span>{label}</span>
-      <input type="number" value={value} min={min} max={max} onChange={handleChange} />
+      <select value={value} onChange={(event) => onChange(Number(event.target.value))}>
+        {options.map((option) => (
+          <option value={option} key={option}>
+            {option}
+          </option>
+        ))}
+      </select>
     </label>
   );
+}
+
+function PositionSelect({
+  label,
+  value,
+  length,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  length: number;
+  onChange: (value: number) => void;
+}) {
+  const positions = Array.from({ length: Math.max(length, 1) }, (_, index) => index + 1);
+
+  return <SelectField label={label} value={value} options={positions} onChange={onChange} />;
 }
 
 export function App() {
@@ -68,12 +90,14 @@ export function App() {
   );
 
   const updateAnchorLength = (anchorLength: number) => {
+    const nextAnchorLength = clampLength(anchorLength);
+
     setConfig((current) => ({
       ...current,
-      anchorLength,
+      anchorLength: nextAnchorLength,
       rules: current.rules.map((rule) => ({
         ...rule,
-        anchorPosition: clampPosition(rule.anchorPosition, anchorLength),
+        anchorPosition: clampPosition(rule.anchorPosition, nextAnchorLength),
       })),
     }));
   };
@@ -87,7 +111,7 @@ export function App() {
         }
 
         const next = { ...rule, ...patch };
-        next.length = Math.max(1, next.length);
+        next.length = clampLength(next.length);
         next.anchorPosition = clampPosition(next.anchorPosition, current.anchorLength);
         next.wordPosition = clampPosition(next.wordPosition, next.length);
         return next;
@@ -180,11 +204,11 @@ export function App() {
                   <h3>Anchor word</h3>
                   <p>{anchorWords.length} candidates</p>
                 </div>
-                <NumberField
+                <SelectField
                   label="Length"
                   value={config.anchorLength}
-                  min={1}
-                  onChange={(value) => updateAnchorLength(Math.max(1, value))}
+                  options={wordLengths}
+                  onChange={updateAnchorLength}
                 />
               </div>
 
@@ -211,24 +235,22 @@ export function App() {
                         </button>
                       </div>
                       <div className="rule-fields">
-                        <NumberField
+                        <SelectField
                           label="Word length"
                           value={rule.length}
-                          min={1}
-                          onChange={(value) => updateRule(rule.id, { length: Math.max(1, value) })}
+                          options={wordLengths}
+                          onChange={(value) => updateRule(rule.id, { length: value })}
                         />
-                        <NumberField
+                        <PositionSelect
                           label="Anchor position"
                           value={rule.anchorPosition}
-                          min={1}
-                          max={config.anchorLength}
+                          length={config.anchorLength}
                           onChange={(value) => updateRule(rule.id, { anchorPosition: value })}
                         />
-                        <NumberField
+                        <PositionSelect
                           label="Linked position"
                           value={rule.wordPosition}
-                          min={1}
-                          max={rule.length}
+                          length={rule.length}
                           onChange={(value) => updateRule(rule.id, { wordPosition: value })}
                         />
                       </div>
